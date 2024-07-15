@@ -1,0 +1,7 @@
+WITH my_cte AS 
+    ( SELECT x, y, row_number() over (order by x) as "rank" from Functions ) 
+SELECT DISTINCT a1.x, a1.y 
+FROM my_cte a1 
+JOIN my_cte a2 
+ON a1.x = a2.y AND a2.x = a1.y
+WHERE a1.rank != a2.rank AND a1.x <= a1.y ORDER BY a1.x
