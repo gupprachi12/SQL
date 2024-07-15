@@ -1,0 +1,13 @@
+WITH ordered_lat_n AS (
+    SELECT lat_n, ROW_NUMBER() OVER (ORDER BY lat_n) as row_num, COUNT(*) OVER() as total_count
+    FROM station
+)
+SELECT ROUND(
+    CASE 
+        WHEN total_count % 2 = 1 THEN 
+            (SELECT lat_n FROM ordered_lat_n WHERE row_num = (total_count + 1) / 2)
+        ELSE 
+            (SELECT avg(lat_n) FROM ordered_lat_n WHERE row_num IN (total_count / 2, total_count / 2 + 1))
+    END, 4) as median
+FROM ordered_lat_n
+LIMIT 1;
