@@ -1,0 +1,7 @@
+SELECT n, 
+CASE WHEN (p IS NULL) THEN "Root" 
+WHEN (n not in (SELECT DISTINCT(p) FROM BST AS b)) IS NULL THEN "Leaf" 
+ELSE "Inner" 
+END 
+FROM BST 
+ORDER BY N;
