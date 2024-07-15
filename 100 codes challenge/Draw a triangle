@@ -1,0 +1,9 @@
+DECLARE @counter INT = 20;
+DECLARE @StarString VARCHAR(100);
+WHILE @counter >= 1
+BEGIN
+    
+     SET @StarString = REPLICATE('* ', @counter);
+     Print @StarSTring;
+    SET @counter = @counter - 1;
+END
