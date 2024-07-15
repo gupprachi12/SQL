@@ -1,0 +1,2 @@
+SELECT CAST(round(sqrt(power (max(LAT_N)-Min(LAT_N),2)+ power(max(LONG_W)-min(LONG_W),2) ),4) AS decimal(10,4)) 
+FROM station;
