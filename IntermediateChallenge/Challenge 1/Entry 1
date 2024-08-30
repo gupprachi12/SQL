@@ -1,0 +1,15 @@
+SELECT 
+  C.customerid
+  ,C.firstname 
+  ,C.lastname 
+  ,sum(d.price) as totalspend
+FROM customers as C
+JOIN orders  as O
+ON c.customerid = o.customerid
+JOIN ordersdishes as od
+ON o.orderid = od.ORDERID
+JOIN dishes as d
+ON od.dishid = d.dishid
+GROUP BY C.customerid, C.firstname , C.lastname
+HAVING totalspend > 450
+ORDER BY totalspend DESC;
