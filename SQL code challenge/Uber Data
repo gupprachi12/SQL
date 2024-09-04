@@ -1,0 +1,38 @@
+---- write a sql query to find the distant values of the row
+
+DROP TABLE IF exists distance;
+CREATE TABLE distance
+(
+	source			varchar(100),
+	destination		varchar(100),
+	distance    	int
+);
+
+INSERT INTO distance VALUES
+('Mumbai', 'Bangalore', 500)
+,('Bangalore',' Mumbai', 500)
+,('Delhi', 'Mathura', 150)
+,('Mathura', 'Delhi', 150)
+,('Nagpur', 'Pune', 500)
+,('Pune', 'Nagpur', 500)
+
+---Option 1: Windows function and Self Join 
+
+WITH table1 AS
+(
+	SELECT distance.* 
+	,row_number() OVER (ORDER BY source) AS number
+	FROM distance 
+ )
+SELECT t1.source
+, t1.destination
+,t1.distance
+FROM table1 t1
+JOIN table1 t2
+ON t1.source = t2.destination
+AND t1.number < t2.number
+
+--- option 2: Greatest and least
+SELECT GREATEST(source, destination) AS place1 , LEAST(source, destination) AS place2, max(distance) AS distance1
+FROM distance
+GROUP BY GREATEST(source, destination) , LEAST(source, destination)
