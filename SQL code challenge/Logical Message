@@ -1,0 +1,33 @@
+
+--- Write an SQL query to display the correct message (meaningful message) from the input comments_and_translation table.
+
+drop table if exists comments_and_translations;
+CREATE TABLE comments_and_translations
+(
+	id				int,
+	comment			varchar(100),
+	translation		varchar(100)
+);
+
+INSERT INTO comments_and_translations VALUES
+(1, 'very good', null),
+(2, 'good', null),
+(3, 'bad', null),
+(4, 'ordinary', null),
+(5, 'cdcdcdcd', 'very bad'),
+(6, 'excellent', null),
+(7, 'ababab', 'not satisfied'),
+(8, 'satisfied', null),
+(9, 'aabbaabb', 'extraordinary'),
+(10, 'ccddccbb', 'medium');
+
+---Observation: if null is not there in translation column, then there is a garbage value in the comment column
+WITH t AS
+(
+SELECT CASE 
+	WHEN translation is null THEN comment
+	ELSE translation
+	END AS main
+FROM comments_and_translations)
+SELECT CONCAT(UPPER(LEFT(main, 1)) , SUBSTRING(main, 2, LEN(main))) AS main_comments
+FROM t
