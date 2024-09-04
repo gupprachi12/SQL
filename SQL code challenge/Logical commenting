@@ -1,0 +1,51 @@
+DROP TABLE IF EXISTS source;
+CREATE TABLE source
+    (
+        id      int,
+        name    varchar(1)
+    );
+
+DROP TABLE IF EXISTS target;
+CREATE TABLE target
+    (
+        id      int,
+        name    varchar(1)
+    );
+
+INSERT INTO source VALUES (1, 'A');
+INSERT INTO source VALUES (2, 'B');
+INSERT INTO source VALUES (3, 'C');
+INSERT INTO source VALUES (4, 'D');
+
+INSERT INTO target VALUES (1, 'A');
+INSERT INTO target VALUES (2, 'B');
+INSERT INTO target VALUES (4, 'X');
+INSERT INTO target VALUES (5, 'F');
+
+SELECT s.id , 'Mismatch' as Comment FROM source s
+INNER JOIN target t
+ON s.id = t.id
+WHERE s.name != t.name
+union
+SELECT s.id, 'New in Source' as Comment FROM source s
+LEFT JOIN target t
+ON s.id = t.id
+WHERE t.id is null
+union
+SELECT t.id , 'New in target' as Comment FROM target t
+LEFT JOIN source s
+ON t.id = s.id
+WHERE s.id is null
+
+---using codependent subqueries
+SELECT s.id ,'Mismatch' AS comment
+FROM source s
+WHERE s.id IN (SELECT t.id FROM target t WHERE s.id = t.id AND s.name != t.name)
+UNION
+SELECT s.id , 'New in source' AS comment
+FROM source s
+WHERE s.id NOT IN (SELECT t.id FROM target t)
+UNION
+SELECT t.id , 'New in Target' AS comment
+FROM target t
+WHERE t.id NOT IN (SELECT s.id FROM Source s)
