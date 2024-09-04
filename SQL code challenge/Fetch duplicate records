@@ -1,0 +1,36 @@
+DROP TABLE IF EXISTS users;
+create table users
+(
+	user_id int primary key,
+	user_name varchar(30) not null,
+	email varchar(50)
+);
+
+insert into users values
+(1, 'Sumit', 'sumit@gmail.com'),
+(2, 'Reshma', 'reshma@gmail.com'),
+(3, 'Farhana', 'farhana@gmail.com'),
+(4, 'Robin', 'robin@gmail.com'),
+(5, 'Robin', 'robin@gmail.com');
+
+---Observation: Record must be duplicate if a user name and email is occuring more than once.
+
+SELECT * FROM USERS
+
+---method 1: Group By
+SELECT u1.user_name 
+,u1.email 
+,count(u1.user_name) AS number 
+FROM users u1
+GROUP BY u1.user_name , u1.email
+HAVING count(u1.user_name) > 1
+
+
+---method 2: Windows function
+WITH CTE AS
+(
+	SELECT * 
+	, ROW_NUMBER() OVER (PARTITION BY user_name ORDER BY user_name) AS number
+	FROM users
+)
+SELECT user_id ,user_name , email FROM CTE WHERE number > 1
