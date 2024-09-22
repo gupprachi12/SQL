@@ -1,0 +1,321 @@
+-------Data Cleaning
+
+UPDATE driver_order
+SET pickup_time = DATEADD(year, 1, pickup_time)
+WHERE YEAR(pickup_time) = 2020
+
+UPDATE driver_order
+SET distance = CAST(TRIM(REPLACE(distance, 'km', ''))AS FLOAT);
+
+UPDATE driver_order
+SET duration = CAST(TRIM(REPLACE(duration ,'min%' ,'')) AS INT)
+
+UPDATE customer_orders
+SET extra_items_included = null
+WHERE extra_items_included = ''
+OR extra_items_included = 'nan'
+
+UPDATE customer_orders
+SET not_include_items = null
+WHERE not_include_items = ''
+
+UPDATE driver_order
+SET cancellation = null
+WHERE cancellation = 'nan' OR cancellation = ''
+
+
+---------- How many rolls were ordered 
+SELECT count(order_id) FROM customer_orders
+
+
+----------How many unique customer orders were made / number of unique customers
+SELECT count(DISTINCT customer_id) AS unique_customers 
+FROM customer_orders
+
+
+----------How many orders were successfully delievered / transactions successful
+SELECT driver.name AS driver_name
+	  , count(order_id) AS successful_orders 
+FROM driver_order AS do
+JOIN driver
+ON driver.driver_id = do.driver_id
+WHERE do.cancellation NOT IN ('Cancellation' , 'customer cancellation')
+OR do.cancellation IS NULL
+GROUP BY driver.name
+
+
+---------- Number of rolls delivered by type
+SELECT  rolls.roll_name
+	   ,count(do.order_id) AS quantity_ordered
+FROM driver_order AS do
+JOIN customer_orders AS co
+ON do.order_id = co.order_id
+JOIN rolls
+ON rolls.roll_id = co.roll_id
+WHERE do.cancellation NOT IN ('Cancellation' , 'customer cancellation')
+OR do.cancellation IS NULL
+GROUP BY rolls.roll_name
+
+---------- Customer preferences
+SELECT co.customer_id 
+	   ,rolls.roll_name
+	   ,count(co.roll_id) AS total_quantity_ordered
+FROM customer_orders AS co
+JOIN rolls
+ON rolls.roll_id = co.roll_id
+GROUP BY co.customer_id 
+	   ,rolls.roll_name 
+ORDER BY total_quantity_ordered
+
+
+---------- The most prefered roll
+WITH order_details 
+AS
+(
+SELECT co.customer_id 
+	   ,rolls.roll_name
+	   ,count(co.roll_id) AS total_quantity_ordered
+FROM customer_orders AS co
+JOIN rolls
+ON rolls.roll_id = co.roll_id
+GROUP BY co.customer_id 
+	   ,rolls.roll_name
+),
+RANKED AS
+(
+SELECT roll_name 
+		,row_number() OVER (PARTITION BY roll_name ORDER BY total_quantity_ordered) AS totalorder
+FROM order_details
+)
+SELECT roll_name 
+FROM RANKED WHERE totalorder = (SELECT max(totalorder) FROM ranked)
+
+-----------Maximum number of rolls in a single order placed
+SELECT TOP 1 'Maximum quantity ordered in a single order id -' AS comment 
+		,order_id 
+		,count(roll_id) AS quantity
+FROM customer_orders 
+GROUP BY order_id
+ORDER BY quantity DESC
+
+
+----------For each delivered orders, how many orders has atleast one change and no change
+
+--with no change
+
+WITH delivery_made 
+AS 
+(
+	SELECT do.order_id , do.cancellation 
+	FROM driver_order AS do
+	WHERE do.cancellation IS null 
+),
+no_change AS
+(
+	SELECT co.order_id 
+		  ,co.customer_id
+		  ,co.roll_id
+		  ,co.not_include_items
+		  ,co.extra_items_included
+	FROM customer_orders AS co
+	WHERE not_include_items is null 
+	AND extra_items_included is null
+)
+SELECT dm.order_id 
+	   ,nc.customer_id
+	   ,nc.roll_id
+	   ,nc.not_include_items
+	   ,nc.extra_items_included
+FROM delivery_made AS dm
+JOIN no_change AS nc
+ON dm.order_id = nc.order_id
+
+
+-- with atleast a change
+WITH delivery_made 
+AS 
+(
+	SELECT do.order_id , do.cancellation 
+	FROM driver_order AS do
+	WHERE do.cancellation IS null 
+),
+modified AS
+(
+	SELECT co.order_id 
+		  ,co.customer_id
+		  ,co.roll_id
+		  ,co.not_include_items
+		  ,co.extra_items_included
+	FROM customer_orders AS co
+	WHERE not_include_items is not null 
+	OR extra_items_included is not null
+)
+SELECT dm.order_id 
+	   ,md.customer_id
+	   ,md.roll_id
+	   ,md.not_include_items
+	   ,md.extra_items_included
+FROM delivery_made AS dm
+JOIN modified AS md
+ON dm.order_id = md.order_id
+
+
+---------- Method 2
+SELECT * FROM customer_orders
+SELECT * FROM driver_order
+
+--creating the temp table for successful deliveries as it is used often
+DROP TABLE IF EXISTS #temp_successful_deliveries
+CREATE TABLE #temp_successful_deliveries
+(
+	order_id INT
+	,driver_id INT
+	,pickup_time DATETIME
+	,distance FLOAT
+	,duration INT
+	,cancellation VARCHAR(23)
+  )
+INSERT INTO #temp_successful_deliveries (order_id 
+									   ,driver_id 
+									   ,pickup_time
+									   ,distance
+									   ,duration
+									   ,cancellation)
+SELECT order_id
+		, driver_id
+		, pickup_time
+		, distance
+		, duration
+		, cancellation
+FROM driver_order
+WHERE cancellation IS NULL
+
+SELECT * FROM #temp_successful_deliveries
+
+--check if there is a change or not
+WITH status_orders AS
+(
+	SELECT co.order_id 
+		   ,co.customer_id
+		   ,co.roll_id
+		   ,co.not_include_items
+		   ,co.extra_items_included
+		   ,CASE WHEN 
+		   co.not_include_items IS null AND co.extra_items_included IS null THEN 'No change'
+		   ELSE 'change'
+		   END AS status
+	FROM customer_orders AS co
+) --joining successful deliveries with the table showing change status
+SELECT so.customer_id 
+	   ,rolls.roll_name
+	   ,COUNT(so.roll_id) AS occurances
+	   ,so.status
+FROM status_orders AS so
+JOIN #temp_successful_deliveries AS succ
+ON succ.order_id = so.order_id
+JOIN rolls
+ON so.roll_id = rolls.roll_id
+GROUP BY so.customer_id 
+	   ,so.roll_id
+	   ,so.status
+	   ,rolls.roll_name
+
+
+----------Which part of the day, there are maximum orders
+SELECT * FROM customer_orders
+
+SELECT day_bin ,COUNT(DISTINCT order_id) AS quantity
+FROM (
+	SELECT order_id 
+		  , CONCAT(
+					CAST(DATEPART(hour, order_date) AS VARCHAR (5))
+				   ,'-'
+	  			   ,CAST(DATEPART(hour, order_date) + 1 AS VARCHAR(5))
+					) AS day_bin
+	FROM customer_orders
+) AS hoursbracket
+GROUP BY day_bin
+ORDER BY quantity DESC
+
+----------Which day of the week, there are maximum orders
+SELECT FORMAT(order_date , 'dddd') AS week_day
+	   ,COUNT(DISTINCT order_id) AS quantity
+FROM customer_orders
+GROUP BY FORMAT(order_date , 'dddd') 
+
+---------How much time does it take to pickup the order considering when driver came to restaurant the order was ready 
+SELECT so.driver_id
+	   ,AVG(DATEDIFF(minute ,co.order_date ,so.pickup_time)) AS avg_time_taken
+FROM #temp_successful_deliveries AS so
+JOIN customer_orders AS co
+ON so.order_id = co.order_id
+GROUP BY driver_id
+
+      
+----------On an average how much distance is travelled for a customer
+SELECT so.driver_id 
+	  ,co.customer_id 
+	  ,AVG(so.distance) AS avg_travel_km
+	  ,AVG(so.duration) AS avg_travel_mins
+FROM #temp_successful_deliveries AS so
+JOIN customer_orders AS co
+ON so.order_id = co.order_id
+GROUP BY so.driver_id 
+	  ,co.customer_id 
+
+     
+-----What is the difference between shortest and longest delievery time for all orders
+SELECT (MAX(duration) - MIN(duration)) AS diff FROM #temp_successful_deliveries
+
+--------------Speed trend of the order delivery
+SELECT d.name
+	   ,COUNT(co.roll_id) AS rolls_quantity
+	   ,ROUND((so.distance/so.duration),2,1) AS speed_kmpermin
+FROM #temp_successful_deliveries AS so
+JOIN customer_orders AS co
+ON so.order_id = co.order_id
+JOIN driver AS d
+ON d.driver_id = so.driver_id
+GROUP BY d.name
+	   ,ROUND((so.distance/so.duration),2,1)
+ORDER BY rolls_quantity DESC, speed_kmpermin
+
+  
+------------What was the average speed for each driver
+--Jessy highest avg speed
+SELECT d.name
+	   ,ROUND(AVG((so.distance/so.duration)),2) AS speed_kmpermin
+FROM #temp_successful_deliveries AS so
+JOIN driver AS d
+ON d.driver_id = so.driver_id
+GROUP BY d.name
+ORDER BY speed_kmpermin
+
+--------------What is the successful delivery percentage for each driver
+WITH t1
+AS
+(
+	SELECT driver_id 
+		   ,cancellation
+		   ,CASE WHEN 
+				cancellation IS null THEN 'Successful'
+				ELSE 'Cancel'
+			END AS status
+			, COUNT(driver_id) AS rate
+	FROM driver_order
+	GROUP BY driver_id , cancellation
+), t2 AS
+(
+	SELECT driver_id, COUNT(driver_id) AS denominator FROM driver_order
+	GROUP BY driver_id
+)
+SELECT t1.driver_id 
+	   ,t1.status 
+	   ,t1.rate 
+	   ,t2.denominator
+	   ,(((CAST(t1.rate AS FLOAT))/ t2.denominator)* 100) AS [percent]
+FROM t1
+JOIN t2
+ON t1.driver_id = t2.driver_id
+WHERE t1.status = 'successful'
+
